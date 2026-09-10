@@ -1,0 +1,1 @@
+export default function KpiCard({label,value,detail}:{label:string,value:string,detail:string}){return <div className="card kpi"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>}

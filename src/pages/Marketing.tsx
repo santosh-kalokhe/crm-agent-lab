@@ -1,0 +1,2 @@
+import { campaigns } from '../data'
+export default function Marketing(){return <><div className="pageHeader"><div><h1>Marketing</h1><p>Plan campaigns and track engagement.</p></div><button className="primary">+ Campaign</button></div><div className="campaignGrid">{campaigns.map(x=><section className="card campaign" key={x.id}><span className="pill">{x.status}</span><h2>{x.name}</h2><p>{x.audience.toLocaleString()} contacts</p><div><strong>{x.responses}</strong><span>responses</span></div></section>)}</div></>}
