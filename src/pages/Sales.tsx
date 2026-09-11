@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
 type Lead = {
@@ -10,20 +11,23 @@ type Lead = {
   value: number
 }
 
+const emptyForm = {
+  name: '',
+  company: '',
+  email: '',
+  status: 'New',
+  value: '0',
+}
+
 export default function Sales() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-
-  const [name, setName] = useState('')
-  const [company, setCompany] = useState('')
-  const [email, setEmail] = useState('')
-  const [status, setStatus] = useState('New')
-  const [value, setValue] = useState('0')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [form, setForm] = useState(emptyForm)
 
   async function loadLeads() {
     if (!supabase) {
-      console.error('Supabase is not configured')
       setLoading(false)
       return
     }
@@ -34,7 +38,7 @@ export default function Sales() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error loading leads:', error)
+      alert(error.message)
     } else {
       setLeads(data ?? [])
     }
@@ -46,34 +50,75 @@ export default function Sales() {
     loadLeads()
   }, [])
 
-  async function addLead(e: React.FormEvent) {
+  function startCreate() {
+    setEditingId(null)
+    setForm(emptyForm)
+    setShowForm(true)
+  }
+
+  function startEdit(lead: Lead) {
+    setEditingId(lead.id)
+    setForm({
+      name: lead.name,
+      company: lead.company ?? '',
+      email: lead.email ?? '',
+      status: lead.status,
+      value: String(lead.value ?? 0),
+    })
+    setShowForm(true)
+  }
+
+  function cancelForm() {
+    setEditingId(null)
+    setShowForm(false)
+    setForm(emptyForm)
+  }
+
+  async function saveLead(e: FormEvent) {
     e.preventDefault()
 
-    if (!supabase) {
-      alert('Supabase is not configured')
+    if (!supabase) return
+
+    const payload = {
+      name: form.name,
+      company: form.company,
+      email: form.email,
+      status: form.status,
+      value: Number(form.value),
+    }
+
+    const result = editingId
+      ? await supabase
+          .from('leads')
+          .update(payload)
+          .eq('id', editingId)
+      : await supabase
+          .from('leads')
+          .insert(payload)
+
+    if (result.error) {
+      alert(result.error.message)
       return
     }
 
-    const { error } = await supabase.from('leads').insert({
-      name,
-      company,
-      email,
-      status,
-      value: Number(value),
-    })
+    cancelForm()
+    await loadLeads()
+  }
+
+  async function deleteLead(id: number) {
+    if (!supabase) return
+
+    if (!confirm('Delete this lead?')) return
+
+    const { error } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', id)
 
     if (error) {
-      console.error(error)
-      alert(`Could not add lead: ${error.message}`)
+      alert(error.message)
       return
     }
-
-    setName('')
-    setCompany('')
-    setEmail('')
-    setStatus('New')
-    setValue('0')
-    setShowForm(false)
 
     await loadLeads()
   }
@@ -86,43 +131,54 @@ export default function Sales() {
           <p>Manage leads and opportunities.</p>
         </div>
 
-        <button
-          className="primary"
-          onClick={() => setShowForm(!showForm)}
-        >
+        <button className="primary" onClick={startCreate}>
           + Add lead
         </button>
       </div>
 
       {showForm && (
-        <section className="card" style={{ marginBottom: '20px' }}>
-          <h2>New Lead</h2>
+        <section className="card" style={{ marginBottom: 20 }}>
+          <h2>{editingId ? 'Edit Lead' : 'New Lead'}</h2>
 
-          <form onSubmit={addLead}>
-            <div style={{ display: 'grid', gap: '12px', maxWidth: '500px' }}>
+          <form onSubmit={saveLead}>
+            <div
+              style={{
+                display: 'grid',
+                gap: 12,
+                maxWidth: 600,
+              }}
+            >
               <input
                 required
                 placeholder="Lead name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={form.name}
+                onChange={(e) =>
+                  setForm({ ...form, name: e.target.value })
+                }
               />
 
               <input
                 placeholder="Company"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
+                value={form.company}
+                onChange={(e) =>
+                  setForm({ ...form, company: e.target.value })
+                }
               />
 
               <input
                 type="email"
                 placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={form.email}
+                onChange={(e) =>
+                  setForm({ ...form, email: e.target.value })
+                }
               />
 
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                value={form.status}
+                onChange={(e) =>
+                  setForm({ ...form, status: e.target.value })
+                }
               >
                 <option>New</option>
                 <option>Contacted</option>
@@ -135,14 +191,21 @@ export default function Sales() {
               <input
                 type="number"
                 min="0"
-                placeholder="Potential value"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
+                value={form.value}
+                onChange={(e) =>
+                  setForm({ ...form, value: e.target.value })
+                }
               />
 
-              <button className="primary" type="submit">
-                Save Lead
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="primary" type="submit">
+                  {editingId ? 'Update Lead' : 'Save Lead'}
+                </button>
+
+                <button type="button" onClick={cancelForm}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </form>
         </section>
@@ -152,7 +215,7 @@ export default function Sales() {
         {loading ? (
           <p>Loading leads...</p>
         ) : leads.length === 0 ? (
-          <p>No leads yet. Click "+ Add lead" to create the first one.</p>
+          <p>No leads yet.</p>
         ) : (
           <table>
             <thead>
@@ -162,6 +225,7 @@ export default function Sales() {
                 <th>Email</th>
                 <th>Status</th>
                 <th>Potential</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
@@ -177,7 +241,15 @@ export default function Sales() {
                     <span className="pill">{lead.status}</span>
                   </td>
                   <td>
-                    ${Number(lead.value || 0).toLocaleString()}
+                    ${Number(lead.value).toLocaleString()}
+                  </td>
+                  <td>
+                    <button onClick={() => startEdit(lead)}>
+                      Edit
+                    </button>{' '}
+                    <button onClick={() => deleteLead(lead.id)}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
