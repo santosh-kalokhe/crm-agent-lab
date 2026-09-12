@@ -13,7 +13,9 @@ jobs:
   fix-bug:
     name: Generate Bug Fix
 
-    if: github.event.label.name == 'analysis-complete'
+    if: >
+      github.event.label.name == 'analysis-complete' &&
+      contains(github.event.issue.labels.*.name, 'agent-created')
 
     runs-on: ubuntu-latest
 
