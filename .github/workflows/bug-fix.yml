@@ -1,8 +1,15 @@
 name: Bug Fix Agent
 
 on:
-  issues:
-    types: [labeled]
+  repository_dispatch:
+    types: [bug-analysis-complete]
+
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "GitHub issue number"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,11 +19,6 @@ permissions:
 jobs:
   fix-bug:
     name: Generate Bug Fix
-
-    if: >
-      github.event.label.name == 'analysis-complete' &&
-      contains(github.event.issue.labels.*.name, 'agent-created')
-
     runs-on: ubuntu-latest
 
     steps:
@@ -38,12 +40,43 @@ jobs:
           git config user.name "Bug Fix Agent"
           git config user.email "bug-fix-agent@users.noreply.github.com"
 
+      - name: Determine issue number
+        id: issue
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "number=${{ github.event.client_payload.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get issue details
+        id: issue-details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --json title --jq '.title')
+          ISSUE_BODY=$(gh issue view "$ISSUE_NUMBER" --json body --jq '.body')
+
+          {
+            echo "title<<EOF"
+            echo "$ISSUE_TITLE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "body<<EOF"
+            echo "$ISSUE_BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Bug Fix Agent
         run: npx tsx scripts/bug-fix.ts
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          ISSUE_TITLE: ${{ steps.issue-details.outputs.title }}
+          ISSUE_BODY: ${{ steps.issue-details.outputs.body }}
           REPOSITORY: ${{ github.repository }}
 
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
