@@ -41,24 +41,25 @@ The app intentionally falls back to demo data until database CRUD is connected.
 Connect Sales CRUD to Supabase, then Cases and Campaigns, then authentication.
 
 ## Architecture
+```text
 Browser
-  │
-  ├── GitHub Codespaces
-  │      ├── VS Code
-  │      ├── React/TypeScript CRM
-  │      ├── Python AI agents
-  │      ├── Playwright
-  │      └── Git
-  │
-  ├── GitHub
-  │      ├── Source code
-  │      ├── Issues
-  │      ├── Branches
-  │      ├── Pull Requests
-  │      └── GitHub Actions
-  │
-  ├── Supabase
-  │      └── CRM database
-  │
-  └── Vercel
-         └── Public CRM
+│
+├── GitHub Codespaces
+│   ├── VS Code
+│   ├── React/TypeScript CRM
+│   ├── Python AI agents
+│   ├── Playwright
+│   └── Git
+│
+├── GitHub
+│   ├── Source code
+│   ├── Issues
+│   ├── Branches
+│   ├── Pull Requests
+│   └── GitHub Actions
+│
+├── Supabase
+│   └── CRM database
+│
+└── Vercel
+    └── Public CRM
