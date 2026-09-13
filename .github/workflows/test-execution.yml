@@ -1,0 +1,50 @@
+name: Test Execution Agent
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  generated-regression-tests:
+    name: Generated Regression Tests
+
+    if: startsWith(github.head_ref, 'agent/fix-issue-')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify generated tests exist
+        run: |
+          if ! find tests/generated -name "*.spec.ts" -print -quit | grep -q .; then
+            echo "No generated regression tests found."
+            exit 1
+          fi
+
+      - name: Build application
+        run: npm run build
+
+      - name: Run generated regression tests
+        run: npx playwright test tests/generated
