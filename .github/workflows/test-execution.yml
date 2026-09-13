@@ -84,23 +84,23 @@ jobs:
           fi
 
       - name: Wait for Vercel Preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          echo "Waiting for: $PLAYWRIGHT_BASE_URL"
+          echo "Waiting for protected Vercel Preview: $PLAYWRIGHT_BASE_URL"
 
           for i in {1..12}; do
-            STATUS=$(curl \
+            if vercel curl "$PLAYWRIGHT_BASE_URL" \
+              --token="$VERCEL_TOKEN" \
               --silent \
-              --output /dev/null \
-              --write-out "%{http_code}" \
-              "$PLAYWRIGHT_BASE_URL" || true)
+              --fail \
+              --output /dev/null; then
 
-            echo "Attempt $i: HTTP $STATUS"
-
-            if [ "$STATUS" = "200" ]; then
               echo "Vercel Preview is ready."
               exit 0
             fi
 
+            echo "Attempt $i: Preview not ready yet."
             sleep 5
           done
 
