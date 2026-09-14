@@ -12,9 +12,9 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
-    screenshot: "only-on-failure",
-    trace: "retain-on-failure",
-    video: "retain-on-failure",
+    screenshot: "on",
+    trace: "on",
+    video: "on",
   },
 
   outputDir: "test-results",
