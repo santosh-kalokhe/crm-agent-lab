@@ -83,31 +83,24 @@ jobs:
             exit 1
           fi
 
-      - name: Configure Vercel authentication
-        run: |
-          mkdir -p "$HOME/.local/share/com.vercel.cli"
-
-          cat > "$HOME/.local/share/com.vercel.cli/auth.json" <<EOF
-          {
-            "token": "${{ secrets.VERCEL_TOKEN }}"
-          }
-          EOF
-
       - name: Wait for Vercel Preview
         run: |
-          echo "Waiting for protected Vercel Preview: $PLAYWRIGHT_BASE_URL"
+          echo "Waiting for public Vercel Preview: $PLAYWRIGHT_BASE_URL"
 
           for i in {1..12}; do
-            if vercel curl "$PLAYWRIGHT_BASE_URL" \
+            STATUS=$(curl \
               --silent \
-              --fail \
-              --output /dev/null; then
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "$PLAYWRIGHT_BASE_URL" || true)
 
+            echo "Attempt $i: HTTP $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
               echo "Vercel Preview is ready."
               exit 0
             fi
 
-            echo "Attempt $i: Preview not ready yet."
             sleep 5
           done
 
