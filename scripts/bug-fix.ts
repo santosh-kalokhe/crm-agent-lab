@@ -2,7 +2,12 @@ import OpenAI from "openai";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, execSync } from "node:child_process";
-import { generateRegressionTests, type GeneratedTest } from "./test-authoring";
+
+import {
+  generateRegressionTests,
+  type ExistingGeneratedTest,
+  type GeneratedTestChange,
+} from "./test-authoring";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -75,25 +80,104 @@ ${content}
   return sections.join("\n");
 }
 
-function writeGeneratedTests(tests: GeneratedTest[]) {
-  for (const test of tests) {
-    const fullPath = path.resolve(test.path);
+function collectExistingGeneratedTests(): ExistingGeneratedTest[] {
+  const root = path.resolve("tests/generated");
 
-    fs.mkdirSync(path.dirname(fullPath), {
-      recursive: true,
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+
+  const tests: ExistingGeneratedTest[] = [];
+
+  function walk(directory: string) {
+    const entries = fs.readdirSync(directory, {
+      withFileTypes: true,
     });
 
-    fs.writeFileSync(fullPath, test.content, "utf8");
+    for (const entry of entries) {
+      const fullPath = path.join(directory, entry.name);
 
-    console.log(`Generated regression test ${test.path}`);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile() || !entry.name.endsWith(".spec.ts")) {
+        continue;
+      }
+
+      const relativePath = path
+        .relative(process.cwd(), fullPath)
+        .split(path.sep)
+        .join("/");
+
+      tests.push({
+        path: relativePath,
+        content: fs.readFileSync(fullPath, "utf8"),
+      });
+    }
+  }
+
+  walk(root);
+
+  tests.sort((a, b) => a.path.localeCompare(b.path));
+
+  return tests;
+}
+
+function resolveGeneratedTestPath(testPath: string) {
+  const root = path.resolve("tests/generated");
+
+  const fullPath = path.resolve(testPath);
+
+  if (fullPath !== root && !fullPath.startsWith(`${root}${path.sep}`)) {
+    throw new Error(`Unsafe generated test path: ${testPath}`);
+  }
+
+  return fullPath;
+}
+
+function applyGeneratedTestChanges(tests: GeneratedTestChange[]) {
+  for (const test of tests) {
+    const fullPath = resolveGeneratedTestPath(test.path);
+
+    if (test.action === "create" || test.action === "update") {
+      if (!test.content || !test.content.trim()) {
+        throw new Error(`Missing test content for ${test.path}`);
+      }
+
+      fs.mkdirSync(path.dirname(fullPath), {
+        recursive: true,
+      });
+
+      fs.writeFileSync(fullPath, test.content, "utf8");
+
+      console.log(
+        `${
+          test.action === "create" ? "Created" : "Updated"
+        } regression test ${test.path}`,
+      );
+
+      continue;
+    }
+
+    if (test.action === "delete") {
+      if (!fs.existsSync(fullPath)) {
+        throw new Error(`Cannot delete missing regression test: ${test.path}`);
+      }
+
+      fs.unlinkSync(fullPath);
+
+      console.log(`Deleted obsolete regression test ${test.path}`);
+    }
   }
 }
 
-function stageGeneratedTests(tests: GeneratedTest[]) {
+function stageGeneratedTestChanges(tests: GeneratedTestChange[]) {
   for (const test of tests) {
-    console.log(`> git add -- ${test.path}`);
+    console.log(`> git add -A -- ${test.path}`);
 
-    execFileSync("git", ["add", "--", test.path], {
+    execFileSync("git", ["add", "-A", "--", test.path], {
       stdio: "inherit",
     });
   }
@@ -404,7 +488,7 @@ function printDryRun(
   summary: string,
   files: ProposedFile[],
   testSummary: string,
-  tests: GeneratedTest[],
+  tests: GeneratedTestChange[],
 ) {
   const pullRequest = buildPullRequestDetails(summary, testSummary);
 
@@ -437,33 +521,52 @@ function printDryRun(
   console.log("\nTest Coverage Summary:\n");
   console.log(testSummary);
 
-  console.log("\nGenerated Tests:\n");
+  console.log("\nProposed Regression Test Changes:\n");
 
   for (const test of tests) {
     console.log("\n------------------------------------");
+
+    console.log(`ACTION: ${test.action.toUpperCase()}`);
+
     console.log(`TEST: ${test.path}`);
+
     console.log("------------------------------------");
-    console.log(test.content);
+
+    if (test.action !== "delete") {
+      console.log(test.content);
+    }
   }
 
   console.log("\nProposed Pull Request:\n");
+
   console.log(`Title: ${pullRequest.title}`);
+
   console.log("\nBody:\n");
+
   console.log(pullRequest.body);
 
   console.log("\n====================================");
+
   console.log("DRY RUN COMPLETE");
+
   console.log("No source files were changed.");
+
   console.log("No test files were written.");
+
   console.log("No branch was created.");
+
   console.log("No commit was created.");
+
   console.log("No code was pushed.");
+
   console.log("No pull request was created.");
+
   console.log("====================================");
 }
 
 async function main() {
   console.log(`Starting Bug Fix Agent for Issue #${issueNumber}`);
+
   console.log(`Dry-run mode: ${dryRun ? "ENABLED" : "DISABLED"}`);
 
   /*
@@ -475,6 +578,7 @@ async function main() {
    * 2. Retrieve the Bug Analysis Agent result.
    */
   const comments = await getIssueComments();
+
   const bugAnalysis = extractBugAnalysis(comments);
 
   console.log("Bug Analysis Agent result found.");
@@ -492,7 +596,20 @@ async function main() {
   console.log(`Validated ${fix.files.length} proposed file change(s).`);
 
   /*
-   * 5. Ask the Test Authoring Agent to generate regression coverage.
+   * 5. Read all existing generated regression tests.
+   */
+  const existingTests = collectExistingGeneratedTests();
+
+  console.log(
+    `Found ${existingTests.length} existing generated regression test(s).`,
+  );
+
+  for (const test of existingTests) {
+    console.log(`Existing regression test: ${test.path}`);
+  }
+
+  /*
+   * 6. Ask the Test Authoring Agent to reconcile regression coverage.
    */
   console.log("Starting Test Authoring Agent...");
 
@@ -504,12 +621,18 @@ async function main() {
     fixSummary: fix.summary,
     sourceCode,
     changedFiles: fix.files,
+    existingTests,
   });
 
   console.log(
-    `Test Authoring Agent generated ${testResult.tests.length} regression test(s).`,
+    `Test Authoring Agent proposed ${testResult.tests.length} regression test change(s).`,
   );
+
   console.log(`Test coverage: ${testResult.summary}`);
+
+  for (const test of testResult.tests) {
+    console.log(`Test action: ${test.action.toUpperCase()} ${test.path}`);
+  }
 
   /*
    * DRY RUN
@@ -528,37 +651,49 @@ async function main() {
   console.log("Live mode enabled. Applying validated changes.");
 
   /*
-   * 6. Modify ONLY validated application files.
+   * 7. Modify ONLY validated application files.
    */
   writeFiles(fix.files);
 
   /*
-   * 7. Write ONLY validated generated regression tests.
+   * 8. Apply ONLY validated generated regression test changes.
+   *
+   * Supported actions:
+   *
+   * create
+   * update
+   * delete
    */
-  writeGeneratedTests(testResult.tests);
+  applyGeneratedTestChanges(testResult.tests);
 
   /*
-   * 8. Verify the application still builds.
+   * 9. Verify the application still builds.
    *
-   * Test execution is intentionally not part of Version 1.
+   * Test execution remains handled by the Test Execution Agent.
    */
   run("npm run build");
 
   /*
-   * 9. Create the dedicated agent branch.
+   * 10. Create the dedicated agent branch.
    */
   const branchName = `agent/fix-issue-${issueNumber}`;
 
   run(`git checkout -b ${branchName}`);
 
   /*
-   * 10. Stage ONLY validated application files and generated tests.
+   * 11. Stage ONLY validated application files.
    */
   stageFiles(fix.files);
-  stageGeneratedTests(testResult.tests);
 
   /*
-   * 11. Confirm there are actual changes.
+   * 12. Stage ONLY validated regression test changes.
+   *
+   * git add -A is required so deleted tests are staged too.
+   */
+  stageGeneratedTestChanges(testResult.tests);
+
+  /*
+   * 13. Confirm there are actual staged changes.
    */
   const diff = execSync("git diff --cached --stat", {
     encoding: "utf8",
@@ -569,33 +704,36 @@ async function main() {
   }
 
   console.log("\nValidated staged changes:");
+
   console.log(diff);
 
   /*
-   * 12. Commit the validated changes.
+   * 14. Commit the validated changes.
    */
   run(`git commit -m "Fix issue #${issueNumber} via Bug Fix Agent"`);
 
   /*
-   * 13. Push ONLY the agent branch.
+   * 15. Push ONLY the agent branch.
    *
    * The agent never pushes to main.
    */
   run(`git push origin ${branchName}`);
 
   /*
-   * 14. Create the Pull Request.
+   * 16. Create the Pull Request.
    *
    * GitHub branch protection provides the human approval gate before main.
    */
   await createPullRequest(branchName, fix.summary, testResult.summary);
 
   console.log("Bug Fix Agent completed successfully.");
+
   console.log("Human approval is required before merge.");
 }
 
 main().catch((error) => {
   console.error("Bug Fix Agent failed");
+
   console.error(error);
 
   process.exit(1);
