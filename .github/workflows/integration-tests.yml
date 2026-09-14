@@ -1,0 +1,125 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  integration-tests:
+    name: CRM Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        run: npm run build
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Preview environment
+        run: |
+          vercel pull \
+            --yes \
+            --environment=preview \
+            --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build Vercel Preview
+        run: |
+          vercel build \
+            --target=preview \
+            --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy Vercel Preview
+        id: deploy
+        run: |
+          PREVIEW_URL=$(vercel deploy \
+            --prebuilt \
+            --target=preview \
+            --token="${{ secrets.VERCEL_TOKEN }}")
+
+          echo "Preview URL: $PREVIEW_URL"
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          echo "PLAYWRIGHT_BASE_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
+
+      - name: Verify Preview URL
+        run: |
+          echo "Playwright target: $PLAYWRIGHT_BASE_URL"
+
+          if [ -z "$PLAYWRIGHT_BASE_URL" ]; then
+            echo "PLAYWRIGHT_BASE_URL is empty."
+            exit 1
+          fi
+
+      - name: Wait for Vercel Preview
+        run: |
+          echo "Waiting for Vercel Preview: $PLAYWRIGHT_BASE_URL"
+
+          for i in {1..18}; do
+            STATUS=$(curl \
+              --silent \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "$PLAYWRIGHT_BASE_URL" || true)
+
+            echo "Attempt $i: HTTP $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Vercel Preview is ready."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Vercel Preview did not become ready."
+          exit 1
+
+      - name: Run CRM integration tests
+        run: |
+          echo "Running integration tests against:"
+          echo "$PLAYWRIGHT_BASE_URL"
+
+          npx playwright test \
+            tests/integration/dashboard.spec.ts \
+            tests/integration/sales-crud.spec.ts \
+            tests/integration/customer-service-crud.spec.ts \
+            tests/integration/marketing-crud.spec.ts
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-integration-results-${{ github.event.pull_request.number }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
