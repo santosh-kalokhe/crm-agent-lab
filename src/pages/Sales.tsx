@@ -148,54 +148,74 @@ export default function Sales() {
                 maxWidth: 600,
               }}
             >
-              <input
-                required
-                placeholder="Lead name"
-                value={form.name}
-                onChange={(e) =>
-                  setForm({ ...form, name: e.target.value })
-                }
-              />
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label htmlFor="lead-name">Lead name</label>
+                <input
+                  id="lead-name"
+                  required
+                  placeholder="Lead name"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm({ ...form, name: e.target.value })
+                  }
+                />
+              </div>
 
-              <input
-                placeholder="Company"
-                value={form.company}
-                onChange={(e) =>
-                  setForm({ ...form, company: e.target.value })
-                }
-              />
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label htmlFor="lead-company">Company</label>
+                <input
+                  id="lead-company"
+                  placeholder="Company"
+                  value={form.company}
+                  onChange={(e) =>
+                    setForm({ ...form, company: e.target.value })
+                  }
+                />
+              </div>
 
-              <input
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm({ ...form, email: e.target.value })
-                }
-              />
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label htmlFor="lead-email">Email</label>
+                <input
+                  id="lead-email"
+                  type="email"
+                  placeholder="Email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm({ ...form, email: e.target.value })
+                  }
+                />
+              </div>
 
-              <select
-                value={form.status}
-                onChange={(e) =>
-                  setForm({ ...form, status: e.target.value })
-                }
-              >
-                <option>New</option>
-                <option>Contacted</option>
-                <option>Qualified</option>
-                <option>Proposal</option>
-                <option>Won</option>
-                <option>Lost</option>
-              </select>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label htmlFor="lead-status">Status</label>
+                <select
+                  id="lead-status"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm({ ...form, status: e.target.value })
+                  }
+                >
+                  <option>New</option>
+                  <option>Contacted</option>
+                  <option>Qualified</option>
+                  <option>Proposal</option>
+                  <option>Won</option>
+                  <option>Lost</option>
+                </select>
+              </div>
 
-              <input
-                type="number"
-                min="0"
-                value={form.value}
-                onChange={(e) =>
-                  setForm({ ...form, value: e.target.value })
-                }
-              />
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label htmlFor="lead-value">Potential value</label>
+                <input
+                  id="lead-value"
+                  type="number"
+                  min="0"
+                  value={form.value}
+                  onChange={(e) =>
+                    setForm({ ...form, value: e.target.value })
+                  }
+                />
+              </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button className="primary" type="submit">
