@@ -1,5 +1,5 @@
 name: Bug Fix Agent
-run-name: "Bug Fix Agent Bug #${{ github.event.issue.number }} — ${{ github.event.issue.title }}"
+run-name: "Bug Fix Agent #${{ github.event.client_payload.issue_number }} — ${{ github.event.client_payload.issue_title }}"
 
 on:
   repository_dispatch:
