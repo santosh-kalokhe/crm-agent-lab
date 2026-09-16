@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("shows Complete CRM CRUD readiness status as yellow", async ({ page }) => {
+test("shows Complete CRM CRUD readiness status as green", async ({ page }) => {
   page.on("console", (message) => {
     console.log(
       `[Browser Console][${message.type()}] ${message.text()}`,
@@ -69,16 +69,16 @@ test("shows Complete CRM CRUD readiness status as yellow", async ({ page }) => {
     name: "Agentic SDLC readiness",
     exact: true,
   });
-  const yellowStatus = page.getByText(
-    "🟡 Complete CRM CRUD",
-    { exact: true },
-  );
   const greenStatus = page.getByText(
     "🟢 Complete CRM CRUD",
     { exact: true },
   );
+  const yellowStatus = page.getByText(
+    "🟡 Complete CRM CRUD",
+    { exact: true },
+  );
 
-  await yellowStatus.waitFor({ state: "visible" });
+  await greenStatus.waitFor({ state: "visible" });
 
   const bodyText = await page
     .locator("body")
@@ -90,15 +90,15 @@ test("shows Complete CRM CRUD readiness status as yellow", async ({ page }) => {
     bodyText.slice(0, 5000),
   );
   console.log(
-    "Yellow Complete CRM CRUD locator count:",
-    await yellowStatus.count(),
-  );
-  console.log(
     "Green Complete CRM CRUD locator count:",
     await greenStatus.count(),
   );
+  console.log(
+    "Yellow Complete CRM CRUD locator count:",
+    await yellowStatus.count(),
+  );
 
   await expect(readinessHeading).toBeVisible();
-  await expect(yellowStatus).toBeVisible();
-  await expect(greenStatus).toHaveCount(0);
+  await expect(greenStatus).toBeVisible();
+  await expect(yellowStatus).toHaveCount(0);
 });
