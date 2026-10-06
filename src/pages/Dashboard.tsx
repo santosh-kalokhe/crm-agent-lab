@@ -296,7 +296,7 @@ export default function Dashboard() {
             <div>🟢 Deployable frontend</div>
             <div>🟢 Supabase database connected</div>
             <div>🟢 Live dashboard</div>
-            <div>🟡 Complete CRM CRUD</div>
+            <div>🟢 Complete CRM CRUD</div>
             <div>⚪ Add GitHub issue workflow</div>
             <div>⚪ Add autonomous agents</div>
           </div>
