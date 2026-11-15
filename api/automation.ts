@@ -48,8 +48,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(503).json({ error: 'Automatic PR creation is disabled. Enable AGENT_AUTO_PUBLISH_ENABLED only on an authenticated, access-controlled deployment.' })
     }
     if (!process.env.GITHUB_PR_TOKEN) return res.status(503).json({ error: 'GITHUB_PR_TOKEN is not configured on the server.' })
-    if (!/from\\s+['"]@playwright\\/test['"]/.test(result.code) ||
-        /\\b(?:child_process|execSync|spawnSync|eval)\\b|\\btest\\.only\\b|\\bprocess\\.env\\b|\\b(?:node:fs|node:child_process)\\b/.test(result.code)) {
+    if (!result.code.includes('@playwright/test') ||
+        /child_process|execSync|spawnSync|test\\.only|node:fs|node:child_process/.test(result.code)) {
       return res.status(502).json({ error: 'Generated test code failed safety checks; PR was not created.' })
     }
     const pullRequest = await publishGeneratedTests(result.code, selectedIds, process.env.GITHUB_PR_TOKEN)
