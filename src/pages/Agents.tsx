@@ -15,10 +15,7 @@ export default function Agents() {
   const [selection, setSelection] = useState('all')
   const [automation, setAutomation] = useState<{ summary: string; code: string; warnings: string[] } | null>(null)
   const [automationLoading, setAutomationLoading] = useState(false)
-  const [publishKey, setPublishKey] = useState('')
-  const [publishing, setPublishing] = useState(false)
   const [pullRequest, setPullRequest] = useState('')
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   async function run(agent: Agent) {
     const source = agent === 'scenarios' && useAnalysis && analysis
@@ -54,30 +51,10 @@ export default function Agents() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Automation generation failed')
       setAutomation(data.result)
-      setSelectedIds(data.selectedIds)
-      setPullRequest('')
+      setPullRequest(data.pullRequest?.url || '')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unexpected error')
     } finally { setAutomationLoading(false) }
-  }
-
-  async function createPullRequest() {
-    if (!automation || !publishKey) return
-    setPublishing(true)
-    setError('')
-    try {
-      const response = await fetch('/api/automation-pr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: automation.code, scenarioIds: selectedIds, publishKey }),
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Could not create pull request')
-      setPullRequest(data.url)
-      setPublishKey('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unexpected error')
-    } finally { setPublishing(false) }
   }
 
   function downloadCode() {
@@ -235,24 +212,16 @@ export default function Agents() {
       <input id="scenario-selection" value={selection} onChange={e => setSelection(e.target.value)}
         placeholder="TS-1, TS-2 or all" style={{ display: 'block', width: '100%', maxWidth: 460, padding: 10, margin: '10px 0' }} />
       <button className="primary" disabled={!!loading || automationLoading || !selection.trim()} onClick={generateAutomation}>
-        {automationLoading ? 'Generating Playwright tests…' : '3. Generate Playwright Tests'}
+        {automationLoading ? 'Generating tests and creating PR…' : '3. Generate Playwright Tests & PR'}
       </button>
       {automation && <div style={{ marginTop: 18 }}>
         <h3>Generated Playwright automation</h3>
         <p>{automation.summary}</p>
         <button onClick={downloadCode}>Download .spec.ts</button>
-        <div style={{ marginTop: 14 }}>
-          <label htmlFor="publish-key">Publishing authorization key</label>
-          <input id="publish-key" type="password" autoComplete="off" value={publishKey}
-            onChange={e => setPublishKey(e.target.value)}
-            style={{ display: 'block', padding: 10, margin: '8px 0', maxWidth: 420, width: '100%' }} />
-          <button className="primary" disabled={publishing || !!pullRequest || !publishKey}
-            onClick={createPullRequest}>
-            {publishing ? 'Creating pull request…' : 'Create GitHub Pull Request'}
-          </button>
-          {pullRequest && <p><a href={pullRequest} target="_blank" rel="noopener noreferrer">
-            View generated Playwright pull request</a></p>}
-        </div>
+        {pullRequest && <p role="status" style={{ marginTop: 14 }}>
+          Draft pull request created: <a href={pullRequest} target="_blank" rel="noopener noreferrer">
+            View Playwright pull request on GitHub</a>
+        </p>}
         {automation.warnings?.length > 0 && <><h4>Review needed</h4>{bulletList(automation.warnings)}</>}
         <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', padding: 16, background: 'var(--surface-secondary, #edf1f6)', borderRadius: 8 }}>
           <code>{automation.code}</code>
