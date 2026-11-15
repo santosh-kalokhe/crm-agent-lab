@@ -3,6 +3,21 @@ import type { ReactNode } from 'react'
 
 type Agent = 'requirements' | 'scenarios'
 type Result = Record<string, unknown>
+async function readApiResponse(response: Response): Promise<Record<string, any>> {
+  const raw = await response.text()
+  let data: Record<string, any>
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    const summary = raw.trim().slice(0, 180)
+    throw new Error('Server returned HTTP ' + response.status + ' instead of JSON. ' +
+      (summary.startsWith('A server') ? 'The server function may have failed or timed out. Check Vercel function logs.' :
+        'Response: ' + summary))
+  }
+  if (!response.ok) throw new Error(data.error || 'Server request failed (HTTP ' + response.status + ')')
+  return data
+}
+
 const example = 'As a sales user, I want to create a lead with name, email and deal value so that I can track new opportunities. Email must be valid and deal value cannot be negative.'
 
 export default function Agents() {
@@ -29,8 +44,7 @@ export default function Agents() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent, input: source }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Agent request failed')
+      const data = await readApiResponse(response)
       if (agent === 'requirements') { setAnalysis(data.result); setScenarios(null); setAutomation(null) }
       else { setScenarios(data.result); setAutomation(null) }
     } catch (e) {
@@ -48,8 +62,7 @@ export default function Agents() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenarios: scenarios.scenarios, selection }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Automation generation failed')
+      const data = await readApiResponse(response)
       setAutomation(data.result)
       setPullRequest(data.pullRequest?.url || '')
     } catch (e) {
