@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const response = await client.responses.create({
       model: process.env.AGENT_MODEL || 'gpt-4.1-mini',
-      instructions: instructions[agent as keyof typeof instructions],
+      instructions: `${instructions[agent as keyof typeof instructions]} Respond in valid JSON only.`,
       input: input.trim(),
       text: { format: { type: 'json_object' } },
       max_output_tokens: 6500,
