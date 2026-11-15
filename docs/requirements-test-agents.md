@@ -24,16 +24,19 @@ Returns `{ "agent": "...", "result": { ... } }`. Invalid input: 400; missing key
 - No requirements or scenarios are persisted to the database. Use Download JSON to export.
 - The API validates the top-level output shape, not every nested field; add strict schema validation for production.
 
-## Agent 3: Playwright Test Automation and GitHub PR
-After Agent 2 generates scenarios, enter `TS-1`, `TS-1, TS-2`, or `all`.
-Agent 3 generates a TypeScript Playwright spec, displays the code and warnings, and offers a download.
-Select **Create GitHub Pull Request** to publish the reviewed code in a new `agent/playwright-*` branch under `tests/generated/` and open a **draft** PR against `main`.
+## Agent 3: Playwright Test Automation and automatic PR
+Select `TS-1`, `TS-1, TS-2`, or `all`, then click **Generate Playwright Tests & PR**.
+The server generates Playwright TypeScript, creates a branch, commits under `tests/generated/`,
+and opens a **draft PR** against `main`. The UI shows the actual GitHub PR URL on success.
+The code preview and download remain available.
 
-### Required server-side environment variables
-- `OPENAI_API_KEY`: existing Agent 1/2/3 generation key
-- `GITHUB_PR_TOKEN`: GitHub fine-grained token with repository Contents (read/write) and Pull requests (read/write) permissions for `santosh-kalokhe/crm-agent-lab`
-- `AGENT_PUBLISH_KEY`: strong shared publishing secret, entered into the Agent 3 UI before creating a PR
+### Deployment configuration
+- `OPENAI_API_KEY`: server-side model key
+- `GITHUB_PR_TOKEN`: GitHub fine-grained token for this repository with Contents (read/write) and Pull requests (read/write)
+- `AGENT_AUTO_PUBLISH_ENABLED=true`: explicit server-side opt-in
 
-The GitHub token must never be exposed to browser code or committed to the repository.
-The shared publishing key is a demo authorization mechanism, **not** a substitute for per-user authentication and rate limiting. Add proper login, access controls, auditing, and request limits before public use.
-The generated code is untrusted and should be reviewed before running it; draft PR creation does not execute tests.
+**Security:** This demo currently lacks application-level user authentication and rate limiting.
+Automatic PR publishing must only be enabled behind authenticated deployment access (for example
+Vercel Deployment Protection with restricted team access). Do not enable it on a public deployment.
+Add application authorization, rate limits, auditing and quotas before making it public.
+The generated tests are untrusted, not executed by this endpoint, and must be reviewed in the draft PR.
