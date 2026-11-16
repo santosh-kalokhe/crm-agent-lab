@@ -3,6 +3,21 @@ import type { ReactNode } from 'react'
 
 type Agent = 'requirements' | 'scenarios'
 type Result = Record<string, unknown>
+async function readApiResponse(response: Response): Promise<Record<string, any>> {
+  const raw = await response.text()
+  let data: Record<string, any>
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    const summary = raw.trim().slice(0, 180)
+    throw new Error('Server returned HTTP ' + response.status + ' instead of JSON. ' +
+      (summary.startsWith('A server') ? 'The server function may have failed or timed out. Check Vercel function logs.' :
+        'Response: ' + summary))
+  }
+  if (!response.ok) throw new Error(data.error || 'Server request failed (HTTP ' + response.status + ')')
+  return data
+}
+
 const example = 'As a sales user, I want to create a lead with name, email and deal value so that I can track new opportunities. Email must be valid and deal value cannot be negative.'
 
 export default function Agents() {
@@ -12,6 +27,10 @@ export default function Agents() {
   const [loading, setLoading] = useState<Agent | null>(null)
   const [error, setError] = useState('')
   const [useAnalysis, setUseAnalysis] = useState(true)
+  const [selection, setSelection] = useState('all')
+  const [automation, setAutomation] = useState<{ summary: string; code: string; warnings: string[] } | null>(null)
+  const [automationLoading, setAutomationLoading] = useState(false)
+  const [pullRequest, setPullRequest] = useState('')
 
   async function run(agent: Agent) {
     const source = agent === 'scenarios' && useAnalysis && analysis
@@ -25,13 +44,40 @@ export default function Agents() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent, input: source }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Agent request failed')
-      if (agent === 'requirements') { setAnalysis(data.result); setScenarios(null) }
-      else setScenarios(data.result)
+      const data = await readApiResponse(response)
+      if (agent === 'requirements') { setAnalysis(data.result); setScenarios(null); setAutomation(null) }
+      else { setScenarios(data.result); setAutomation(null) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unexpected error')
     } finally { setLoading(null) }
+  }
+
+  async function generateAutomation() {
+    if (!scenarios || !Array.isArray(scenarios.scenarios)) return
+    setAutomationLoading(true)
+    setError('')
+    try {
+      const response = await fetch('/api/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenarios: scenarios.scenarios, selection }),
+      })
+      const data = await readApiResponse(response)
+      setAutomation(data.result)
+      setPullRequest(data.pullRequest?.url || '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unexpected error')
+    } finally { setAutomationLoading(false) }
+  }
+
+  function downloadCode() {
+    if (!automation) return
+    const url = URL.createObjectURL(new Blob([automation.code], { type: 'text/plain' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'agent3-generated.spec.ts'
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   function download(name: string, result: Result) {
@@ -172,5 +218,28 @@ export default function Agents() {
     </section>
     {analysis && renderResult('Agent 1 — Requirement Analysis', analysis, 'requirement-analysis.json', 'requirements')}
     {scenarios && renderResult('Agent 2 — Test Scenarios', scenarios, 'test-scenarios.json', 'scenarios')}
+    {scenarios && <section className="card" style={{ marginTop: 18 }}>
+      <h2>Agent 3 — Playwright Test Automation</h2>
+      <p>Enter scenario IDs separated by commas (for example TS-1, TS-2), or all.</p>
+      <label htmlFor="scenario-selection">Scenario selection</label>
+      <input id="scenario-selection" value={selection} onChange={e => setSelection(e.target.value)}
+        placeholder="TS-1, TS-2 or all" style={{ display: 'block', width: '100%', maxWidth: 460, padding: 10, margin: '10px 0' }} />
+      <button className="primary" disabled={!!loading || automationLoading || !selection.trim()} onClick={generateAutomation}>
+        {automationLoading ? 'Generating tests and creating PR…' : '3. Generate Playwright Tests & PR'}
+      </button>
+      {automation && <div style={{ marginTop: 18 }}>
+        <h3>Generated Playwright automation</h3>
+        <p>{automation.summary}</p>
+        <button onClick={downloadCode}>Download .spec.ts</button>
+        {pullRequest && <p role="status" style={{ marginTop: 14 }}>
+          Draft pull request created: <a href={pullRequest} target="_blank" rel="noopener noreferrer">
+            View Playwright pull request on GitHub</a>
+        </p>}
+        {automation.warnings?.length > 0 && <><h4>Review needed</h4>{bulletList(automation.warnings)}</>}
+        <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', padding: 16, background: 'var(--surface-secondary, #edf1f6)', borderRadius: 8 }}>
+          <code>{automation.code}</code>
+        </pre>
+      </div>}
+    </section>}
   </div>
 }
